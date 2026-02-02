@@ -13,6 +13,10 @@ load_dotenv()
 
 app = FastAPI(title="Honeypot API", description="Hybrid ML + LLM Agentic Scam Analysis API")
 
+@app.get("/")
+def health():
+    return {"status": "ok"}
+
 # --- Module 1: Classification Models (Hybrid) ---
 # Load ML models at startup
 try:
@@ -34,7 +38,7 @@ else:
     print("⚠️ GROQ_API_KEY not found. Using fallback templates.")
 
 # --- Module 3: Authentication ---
-API_KEY = "hackathon-secret-key"
+API_KEY = "honeypot_key_2026_eval"
 
 async def get_api_key(x_api_key: str = Header(...)):
     if x_api_key != API_KEY:
@@ -165,6 +169,3 @@ async def analyze_scam(request: AnalyzeRequest, api_key: str = Depends(get_api_k
         is_ml_used=ML_ENABLED
     )
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
