@@ -3,8 +3,6 @@ from fastapi.security import APIKeyHeader
 import random
 import re
 
-# -------------------- CONFIG --------------------
-
 API_KEY = "honeypot_key_2026_eval"
 api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
 
@@ -12,15 +10,12 @@ app = FastAPI()
 
 sessions = {}
 
-# -------------------- AUTH --------------------
 
 def get_api_key(api_key: str = Depends(api_key_header)):
     if api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Unauthorized")
     return api_key
 
-
-# -------------------- HEALTH --------------------
 
 @app.get("/")
 def health():
@@ -34,8 +29,6 @@ def analyze_get():
         "message": "Honeypot analyze endpoint is live. Use POST to analyze messages."
     }
 
-
-# -------------------- UTILS --------------------
 
 def extract_entities(text: str):
     upi = re.findall(r'\b[\w.-]+@[\w.-]+\b', text)
@@ -78,8 +71,6 @@ async def generate_agent_response(session_id, message, scam_type, entities):
     return "Can you explain this more clearly?"
 
 
-# -------------------- MAIN ENDPOINT --------------------
-
 @app.post("/analyze")
 async def analyze_scam(
     request: Request,
@@ -98,7 +89,6 @@ async def analyze_scam(
     if not message_text:
         message_text = "This is a suspicious message asking for money."
 
-    # ---- Intelligence + ML ----
 
     entities = extract_entities(message_text)
     scam_type = predict_scam_type(message_text)
@@ -108,7 +98,6 @@ async def analyze_scam(
         session_id, message_text, scam_type, entities
     )
 
-    # ---- Session memory ----
 
     if session_id not in sessions:
         sessions[session_id] = []
@@ -117,10 +106,6 @@ async def analyze_scam(
         "scammer": message_text,
         "agent": agent_reply
     })
-
-    # --------------------
-    # ✅ GUVI EXPECTED RESPONSE
-    # --------------------
 
     return {
         "status": "success",
