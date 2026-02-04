@@ -47,6 +47,22 @@ async def get_api_key(x_api_key: str = Header(...)):
     return x_api_key
 
 # --- Module 4: Intelligence Extraction ---
+def build_tester_response(session_id, scam_type, confidence, entities, agent_response):
+    return {
+        "status": "success",
+        "extracted_intelligence": {
+            "upi_ids": entities.get("upi", []),
+            "bank_accounts": entities.get("bank_info", []),
+            "phone_numbers": entities.get("phone", []),
+            "phishing_links": entities.get("urls", []),
+            "scam_type": scam_type,
+            "confidence_score": confidence
+        },
+        "agent_response": agent_response,
+        "session_id": session_id
+    }
+
+
 def extract_entities(text: str) -> Dict[str, List[str]]:
     return {
         "upi": list(set(re.findall(r"[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}", text))),
@@ -183,11 +199,11 @@ async def analyze_scam(
         {"role": "assistant", "content": response_text}
     )
 
-    return AnalyzeResponse(
-        session_id=session_id,
-        scam_type=scam_type,
-        confidence_score=confidence,
-        extracted_entities=entities,
-        agent_response=response_text,
-        is_ml_used=ML_ENABLED
-    )
+    return build_tester_response(
+    session_id=session_id,
+    scam_type=scam_type,
+    confidence=confidence,
+    entities=entities,
+    agent_response=response_text
+)
+
