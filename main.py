@@ -178,17 +178,35 @@ def predict_scam(text: str) -> bool:
     return False
 
 
-def generate_agent_reply(history: List[Dict[str, str]], current_message: str) -> str:
-    """Generates a response using Groq LLM."""
+def generate_agent_reply(history: List[Dict[str, str]], current_message: str, known_entities: Dict) -> str:
+    """Generates a response using Groq LLM with goal-directed prompting."""
     if not groq_client:
         return "I am confused. Can you explain why you need this?"
+
+    # Determine missing information
+    missing_info = []
+    if not known_entities.get("bankAccounts"):
+        missing_info.append("Bank Account Number")
+    if not known_entities.get("upiIds"):
+        missing_info.append("UPI ID (ask for 'app' or 'ID')")
+    if not known_entities.get("phishingLinks"):
+        missing_info.append("Payment Link (ask for a 'website')")
+
+    strategy_instruction = (
+        "STRATEGY: You are playing a character. "
+        "Occasionaly ask if there is an 'easier way' to pay, like a 'link' or 'app' (UPI), to trick them into revealing more info. "
+    )
     
-    # Construc system prompt
+    if missing_info:
+        strategy_instruction += f" GOAL: You still need to collect: {', '.join(missing_info)}. Invent a pretext to ask for them (e.g. 'My bank app isn't working, do you have a link/UPI?')."
+
+    # Construct system prompt
     system_prompt = (
         "You are an elderly, slightly confused but polite individual named 'Grandma Edna'. "
         "You are chatting with someone who might be a scammer. "
         "Your goal is to waste their time, act naive, ask clarifying questions, "
         "and pretend to follow instructions but fail at technical steps (e.g., 'I can't find the button'). "
+        f"{strategy_instruction} "
         "NEVER reveal you are an AI. Keep messages short (1-2 sentences)."
     )
     
@@ -207,7 +225,7 @@ def generate_agent_reply(history: List[Dict[str, str]], current_message: str) ->
             messages=messages,
             model="llama-3.3-70b-versatile", # Efficient, fast model
             temperature=0.7,
-            max_tokens=100,
+            max_tokens=150,
         )
         return chat_completion.choices[0].message.content.strip()
     except Exception as e:
@@ -268,12 +286,17 @@ async def analyze(
         is_scam = current_msg_is_scam or has_history
         
         # 2. Extract Entities
-        entities = extract_entities(request.message.text)
+        # Aggregate text from history + current message to know what we have found SO FAR
+        full_text = request.message.text + " " + " ".join([m.text for m in request.conversationHistory])
+        all_entities = extract_entities(full_text)
+        
+        # Determine just current message entities for immediate analysis
+        current_entities = extract_entities(request.message.text)
         
         if is_scam:
             # Convert history to simple dict list for helper
             history_dicts = [m.dict() for m in request.conversationHistory]
-            agent_reply = generate_agent_reply(history_dicts, request.message.text)
+            agent_reply = generate_agent_reply(history_dicts, request.message.text, all_entities)
         else:
             # If not detected as scam, return a standard message or maybe the agent still replies?
             # "The Agent continues the conversation" implies it only engages if scam detected.
@@ -284,7 +307,7 @@ async def analyze(
         if is_scam:
             analysis_data = {
                 "scam_detected": True,
-                "entities": entities
+                "entities": all_entities # Pass cumulative entities
             }
             background_tasks.add_task(
                 check_and_send_callback,
