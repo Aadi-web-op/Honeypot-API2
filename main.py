@@ -96,21 +96,37 @@ async def verify_api_key(api_key: str = Depends(api_key_header)):
 # --- Helper Functions ---
 
 def extract_entities(text: str) -> Dict[str, List[str]]:
-    """Extracts entities using regex."""
-    upi_pattern = r'[\w\.-]+@[\w\.-]+'
-    url_pattern = r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+'
-    phone_pattern = r'(?:\+?\d{1,3}[ -]?)?\(?\d{3}\)?[ -]?\d{3}[ -]?\d{4}'
+    """Extracts entities using regex and deduplicates results."""
+    
+    # Improved Regex Patterns
+    # UPI: basic pattern but handled to avoid trailing dots
+    upi_pattern = r'[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}'
+    
+    # URL: http/https links
+    url_pattern = r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+(?:/[-\w./?%&=]*)?'
+    
+    # Phone: 10 digit Indian mobile often starts with 6-9. 
+    phone_pattern = r'(?:\+91[\-\s]?)?[6-9]\d{9}\b' 
+    
+    # Bank Account: 9-18 digits. 
     bank_account_pattern = r'\b\d{9,18}\b'
     
     # Simple keywords for suspicious terms
-    suspicious_keywords_list = ["urgent", "verify", "block", "suspend", "kyc", "pan", "aadhar", "win", "lottery", "expired"]
-    found_keywords = [word for word in suspicious_keywords_list if word in text.lower()]
+    suspicious_keywords_list = ["urgent", "verify", "block", "suspend", "kyc", "pan", "aadhar", "win", "lottery", "expired", "otp", "pin", "cvv", "expiry", "code"]
+    found_keywords = list(set([word for word in suspicious_keywords_list if word in text.lower()]))
 
+    # Extraction
+    upis = re.findall(upi_pattern, text)
+    urls = re.findall(url_pattern, text)
+    phones = re.findall(phone_pattern, text)
+    banks = re.findall(bank_account_pattern, text)
+    
+    # Cleaning and Deduplication
     return {
-        "bankAccounts": re.findall(bank_account_pattern, text),
-        "upiIds": re.findall(upi_pattern, text),
-        "phishingLinks": re.findall(url_pattern, text),
-        "phoneNumbers": re.findall(phone_pattern, text),
+        "bankAccounts": sorted(list(set(banks))),
+        "upiIds": sorted(list(set(upis))),
+        "phishingLinks": sorted(list(set(urls))),
+        "phoneNumbers": sorted(list(set(phones))),
         "suspiciousKeywords": found_keywords
     }
 
