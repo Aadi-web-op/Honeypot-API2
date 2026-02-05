@@ -106,12 +106,16 @@ def extract_entities(text: str) -> Dict[str, List[str]]:
     suspicious_keywords_list = ["urgent", "verify", "block", "suspend", "kyc", "pan", "aadhar", "win", "lottery", "expired"]
     found_keywords = [word for word in suspicious_keywords_list if word in text.lower()]
 
+    # Helper to clean and dedup
+    def clean_and_dedup(items):
+        return list(set([item.strip('.').strip() for item in items]))
+
     return {
-        "bankAccounts": re.findall(bank_account_pattern, text),
-        "upiIds": re.findall(upi_pattern, text),
-        "phishingLinks": re.findall(url_pattern, text),
-        "phoneNumbers": re.findall(phone_pattern, text),
-        "suspiciousKeywords": found_keywords
+        "bankAccounts": clean_and_dedup(re.findall(bank_account_pattern, text)),
+        "upiIds": clean_and_dedup(re.findall(upi_pattern, text)),
+        "phishingLinks": clean_and_dedup(re.findall(url_pattern, text)),
+        "phoneNumbers": clean_and_dedup(re.findall(phone_pattern, text)),
+        "suspiciousKeywords": list(set(found_keywords))
     }
 
 def predict_scam(text: str) -> bool:
