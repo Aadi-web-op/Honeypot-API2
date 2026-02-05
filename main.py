@@ -106,13 +106,12 @@ def extract_entities(text: str) -> Dict[str, List[str]]:
     url_pattern = r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+(?:/[-\w./?%&=]*)?'
     
     # Phone: 
-    # Match +91 XXXXXXXXXX or just XXXXXXXXXX (starting with 6-9)
-    # Critical: Use lookbehind (?<!\d) and lookahead (?!\d) to ensure we don't match substrings of account numbers
-    phone_pattern = r'(?<!\d)(?:\+91[\-\s]?)?[6-9]\d{9}(?!\d)'
+    # Broader match: 10 digits starting with 6-9. 
+    # We rely on post-processing to remove it from "banks" rather than strict regex boundaries which might fail on edge cases.
+    phone_pattern = r'(?:\+91[\-\s]?)?[6-9]\d{9}'
     
     # Bank Account: 9-18 digits.
-    # Also use boundaries
-    bank_account_pattern = r'(?<!\d)\d{9,18}(?!\d)'
+    bank_account_pattern = r'\d{9,18}'
     
     # Simple keywords for suspicious terms
     suspicious_keywords_list = ["urgent", "verify", "block", "suspend", "kyc", "pan", "aadhar", "win", "lottery", "expired", "otp", "pin", "cvv", "expiry", "code"]
