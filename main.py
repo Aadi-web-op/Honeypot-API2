@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 import httpx
 from dotenv import load_dotenv
 import joblib
-from groq import Groq
+import requests
 
 # Load environment variables
 load_dotenv()
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Constants
 API_KEY = "honeypot_key_2026_eval"
 CALLBACK_URL = "https://hackathon.guvi.in/api/updateHoneyPotFinalResult"
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 # --- Data Models (Strictly matching the requirements) ---
 
@@ -52,13 +52,12 @@ api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
 # Global variables for models and clients
 scam_classifier = None
 tfidf_vectorizer = None
-groq_client = None
 
 # --- Startup Event ---
 
 @app.on_event("startup")
 async def startup_event():
-    global scam_classifier, tfidf_vectorizer, groq_client
+    global scam_classifier, tfidf_vectorizer
     
     # 1. Load ML Models
     try:
@@ -76,15 +75,9 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Error loading ML models: {e}")
 
-    # 2. Initialize Groq Client
-    if GROQ_API_KEY:
-        try:
-            groq_client = Groq(api_key=GROQ_API_KEY)
-            logger.info("Groq client initialized.")
-        except Exception as e:
-            logger.error(f"Error initializing Groq client: {e}")
-    else:
-        logger.error("GROQ_API_KEY not set in environment.")
+    # 2. Check OpenRouter Key
+    if not OPENROUTER_API_KEY:
+        logger.error("OPENROUTER_API_KEY not set in environment.")
 
 # --- Security ---
 
@@ -179,8 +172,8 @@ def predict_scam(text: str) -> bool:
 
 
 def generate_agent_reply(history: List[Dict[str, str]], current_message: str, known_entities: Dict) -> str:
-    """Generates a response using Groq LLM with goal-directed prompting."""
-    if not groq_client:
+    """Generates a response using OpenRouter LLM with goal-directed prompting."""
+    if not OPENROUTER_API_KEY:
         return "I am confused. Can you explain why you need this?"
 
     # Determine missing information
@@ -221,15 +214,24 @@ def generate_agent_reply(history: List[Dict[str, str]], current_message: str, kn
     messages.append({"role": "user", "content": current_message})
 
     try:
-        chat_completion = groq_client.chat.completions.create(
-            messages=messages,
-            model="llama-3.3-70b-versatile", # Efficient, fast model
-            temperature=0.7,
-            max_tokens=150,
+        response = requests.post(
+            url="https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://hacktrinity.vercel.app/", # Optional. Site URL for rankings on openrouter.ai.
+                "X-Title": "HackTrinity HoneyPot", # Optional. Site title for rankings on openrouter.ai.
+            },
+            data=json.dumps({
+                "model": "meta-llama/llama-3-8b-instruct",
+                "messages": messages
+            })
         )
-        return chat_completion.choices[0].message.content.strip()
+        response.raise_for_status()
+        response_json = response.json()
+        return response_json['choices'][0]['message']['content'].strip()
     except Exception as e:
-        logger.error(f"Groq generation failed: {e}")
+        logger.error(f"OpenRouter generation failed: {e}")
         return "Oh dear, I didn't quite catch that. Could you repeat?"
 
 async def check_and_send_callback(session_id: str, history: List[Message], current_msg: Message, analysis_result: Dict):
